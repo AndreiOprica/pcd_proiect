@@ -1,7 +1,5 @@
 /.vscode
-/Client2
-/client2
+/Client
 /main.out
-/received_from_client.png
 /test_image.png
 /serverOut
