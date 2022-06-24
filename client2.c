@@ -71,7 +71,7 @@ void receive(int sockfd, int typeOp, char *name) {
     char p_array[1024];
 
 
-	char *dir_name = "Client2";
+	char *dir_name = "Client/";
 	char *ext = ".png";
 	int len = strlen(dir_name) + strlen(name) + strlen(ext) + 2;
 	char *img_name = malloc(len);
