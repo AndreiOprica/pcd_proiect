@@ -43,6 +43,7 @@ def sendimg(client, choice, image_path):
     print('Client sended')
 
 
+
 def receive(client, choice, image_name):
     img_name = 'Client/' + image_name + str(choice) + '.png'
     print('Receiving image size')
@@ -53,11 +54,11 @@ def receive(client, choice, image_name):
     file = open(img_name, 'wb')
 
     print('Receiving image')
-    image_chunk = client.recv(1024)
 
-    while image_chunk:
-        file.write(image_chunk)
-        image_chunk = client.recv(1024)
+    while value > 0:
+        image_data = client.recv(1024)
+        value = value - 1024
+        file.write(image_data)
 
     file.close()
     print('Received image')
