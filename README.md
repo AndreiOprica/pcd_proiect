@@ -15,4 +15,4 @@ Run client in C:
 Run client in Python:
 python3 client3.py path_to_image name_processed_image
 
-To see the commands correct, view this file as raw.
+To see the commands correct, view this file as source blob.
