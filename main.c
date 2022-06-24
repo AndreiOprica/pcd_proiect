@@ -97,19 +97,22 @@ int func(int connfd) {
     printf("Reading Picture Size\n");
     int size;
     recv(connfd, &size, sizeof(int),0);
+    printf("Received Picture Size: %d\n", size);
 
     //Read Picture Byte Array
     printf("Reading Picture Byte Array\n");
     char p_array[1024];
-    FILE *image = fopen("received_from_client.png", "w");
+    FILE *image = fopen("serverOut/received_from_client.png", "wb");
     int nb;
     while (size>0) {
+
         nb = recv(connfd, p_array, 1024, 0);
         if (nb<0)
             continue;
         size= size-nb;
-        //printf("I read %d bytes and %d size\n",nb, size);
+        
         fwrite(p_array, 1, nb, image);
+
     }
 
     fclose(image);
@@ -117,7 +120,7 @@ int func(int connfd) {
     VipsImage *in;
 
     printf("Image proccesing started\n");
-    if (!(in = vips_image_new_from_file( "received_from_client.png", NULL )))
+    if (!(in = vips_image_new_from_file( "serverOut/received_from_client.png", NULL )))
         vips_error_exit(NULL);
 
     VipsImage *out;
@@ -156,7 +159,8 @@ void sendImg(int connfd) {
 
     printf("Getting Picture Size\n");
     FILE *picture;
-    picture = fopen("serverOut/output.png", "r");
+    picture = fopen("serverOut/output.png", "rb");
+
     int sizePic;
     fseek(picture, 0, SEEK_END);
     sizePic = ftell(picture);
@@ -165,15 +169,19 @@ void sendImg(int connfd) {
     //Send Picture Size
     printf("Sending Picture Size\n");
     send(connfd, &sizePic, sizeof(sizePic), 0);
+    printf("Sended Picture Size: %d\n", sizePic);
 
     printf("Sending Picture as Byte Array\n");
     char send_buffer[1024]; // no link between BUFSIZE and the file size
 	do {
+
         int nb = fread(send_buffer, 1, sizeof(send_buffer), picture);
         send(connfd, send_buffer, nb, 0);
+
 	}while (!feof(picture));
 
     fclose(picture);
+    printf("Sended Picture as Byte Array\n");
 }
 
 int main( int argc, char **argv ) {
@@ -220,6 +228,7 @@ int main( int argc, char **argv ) {
 
 
     while (TRUE) {
+
         // Now server is ready to listen and verification
         if ((listen(sockfd, 50)) != 0) {
             printf("Listen failed...\n");
@@ -245,6 +254,7 @@ int main( int argc, char **argv ) {
         if(func(connfd) == 0) {
             sendImg(connfd);
         }
+        
     }
 
     // After chatting close the socket

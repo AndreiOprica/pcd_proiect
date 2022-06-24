@@ -14,14 +14,14 @@
 
 
 void sendImg(int sockfd, int typeOperation, char *image) {
+
 	printf("Send Type Of Operation\n");
 	send(sockfd, &typeOperation, sizeof(int), 0);
 
-	
 
     printf("Getting Picture Size\n");
     FILE *picture;
-    picture = fopen(image, "r");
+    picture = fopen(image, "rb");
 
     int sizePic;
     fseek(picture, 0, SEEK_END);
@@ -31,14 +31,16 @@ void sendImg(int sockfd, int typeOperation, char *image) {
     //Send Picture Size
     printf("Sending Picture Size\n");
     send(sockfd, &sizePic, sizeof(sizePic), 0);
+	printf("Sended Picture Size: %d\n", sizePic);
 
     //Send Picture as Byte Array
     printf("Sending Picture as Byte Array\n");
     char send_buffer[1024]; // no link between BUFSIZE and the file size
 	do {
+
         int nb = fread(send_buffer, 1, sizeof(send_buffer), picture);
         send(sockfd, send_buffer, nb, 0);
-		//printf("Send %d bytes\n",nb);
+		
 	}while(!feof(picture));
 
     fclose(picture);
@@ -69,7 +71,7 @@ void receive(int sockfd, int typeOp, char *name) {
     char p_array[1024];
 
 
-	char *dir_name = "Client2/";
+	char *dir_name = "Client2";
 	char *ext = ".png";
 	int len = strlen(dir_name) + strlen(name) + strlen(ext) + 2;
 	char *img_name = malloc(len);
@@ -83,15 +85,17 @@ void receive(int sockfd, int typeOp, char *name) {
 	strncat(img_name, tp, len);
 	strncat(img_name, ext, len);
 
-    FILE *image = fopen(img_name, "w");
-
+    FILE *image = fopen(img_name, "wb");
+	printf("Picture size received: %d\n", size);
     while (size>0) {
+
         int nb = recv(sockfd, p_array, 1024, 0);
         if(nb<0)
             continue;
         size= size-nb;
-        //printf("I read %d bytes and %d size\n",nb, size);
+        
         fwrite(p_array, 1, nb, image);
+
     }
 
 	fclose(image);
@@ -162,7 +166,9 @@ int main(int argc, char *argv[]) {
 			} else {
 				exit(0);
 			}
+			
 	// close the socket
 	close(sockfd);
+
 	}
 }
