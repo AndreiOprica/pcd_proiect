@@ -22,6 +22,7 @@ Run client in Python:
 python3 client3.py path_to_image name_processed_image
 
 To see the commands correct, view this file as source blob.
-To work properly the program needs in the project folder two folders:
-  - first named: serverOut
-  - second named: Client
+To work properly the program needs in the project folder three folders:
+  - 1st named: serverIn
+  - 2nd named: serverOut
+  - 3rd named: Client
