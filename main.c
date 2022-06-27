@@ -10,14 +10,12 @@
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include <time.h>
 
 #define SOCK_PATH "echo_socket"
 #define PORT 5001
 #define SA struct sockaddr
 #define m 80
 
-clock_t t;
 
 VipsImage* grayscale(VipsImage* img) {
     VipsImage *scRGB;
@@ -88,7 +86,7 @@ VipsImage* rotation270(VipsImage* img) {
 
 }
 
-char *randstring(size_t length) {
+char *randstring(size_t length, int tp) {
 
     static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";        
     char *randomString = NULL;
@@ -97,11 +95,12 @@ char *randstring(size_t length) {
         randomString = malloc(sizeof(char) * (length +1));
 
         if (randomString) {            
-            for (int n = 0;n < length;n++) {            
+            for (int n = 0;n < length - 1;n++) {            
                 int key = rand() % (int)(sizeof(charset) -1);
                 randomString[n] = charset[key];
             }
 
+            randomString[length - 1] = tp + '0';
             randomString[length] = '\0';
         }
     }
@@ -161,15 +160,13 @@ int func(int connfd) {
     printf("Reading Picture Byte Array\n");
     char p_array[1024];
     char *filename;
-    filename = randstring(8);
+    filename = randstring(8, type);
     strcat(filename, ".png");
 
-    printf("%s\n", filename);
 
     char folder[255] = "serverIn/";
     strcat(folder, filename);
 
-    printf("%s\n", folder);
 
     FILE *image = fopen(folder, "wb");
     int nb;
@@ -235,16 +232,18 @@ int func(int connfd) {
 }
 
 
-void *clientHandler(void* pconfd){
+void *clientHandler(void* pconfd) {
+
     int connfd = *(int*)pconfd;
     free(pconfd);
+
     // Function for chatting between client and server
     if(func(connfd) == 1) {
         printf("Client disconnected");
     }
 }
 
-void *inetClient(){
+void *inetClient() {
     int sockfd, connfd, len, nready;
     struct sockaddr_in servaddr, cli;
     fd_set rset;
@@ -284,8 +283,6 @@ void *inetClient(){
 
         len = sizeof(cli);
 
-        
-
         // Accept the data packet from client and verification
         connfd = accept(sockfd, (SA*)&cli, &len);
         if (connfd < 0) {
@@ -300,18 +297,141 @@ void *inetClient(){
 
         *pconfd = connfd;
 
-        pthread_create(&t, NULL, clientHandler, pconfd);
-
-        
-        
+        pthread_create(&t, NULL, clientHandler, pconfd); 
     }
 
     // After chatting close the socket
     close(sockfd);
 }
 
+int noOfImages(int type){
+
+    DIR *directory;
+    struct dirent *dir;
+    int total = 0;
+    char c;
+    int number;
+
+    directory = opendir("./serverOut");
+
+    if (directory) {
+
+        while ((dir = readdir(directory)) != NULL) {
+
+            c = dir->d_name[7];
+            number = c - '0';
+            if(number == type){
+                total++;
+            }
+        }
+
+        closedir(directory);
+    }
+
+    return total;
+}
+
+int noOfAllImages(){
+
+    DIR *directory;
+    struct dirent *dir;
+    int total = 0;
+
+    directory = opendir("./serverOut");
+
+    if (directory) {
+
+        while ((dir = readdir(directory)) != NULL) {
+                total++;
+        }
+
+        closedir(directory);
+    }
+
+    return total - 2;
+}
+
+void adminHandler(int connfd) {
+    while (TRUE) {
+        
+        int option;
+
+        recv(connfd, &option, sizeof(int), 0);
+
+        int choice;
+        clock_t end;
+        double uptime;
+
+        if (option == 0) {
+            choice = noOfAllImages();
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 1) {
+            choice = noOfImages(1);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 2) {
+            choice = noOfImages(2);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 3) {
+            choice = noOfImages(3);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 4) {
+            choice = noOfImages(4);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else if (option == 5) {
+            choice = noOfImages(5);
+            send(connfd, &choice, sizeof(int), 0);
+        }
+        else {
+            break;
+        }
+
+    }
+}
+
 void *adminClient(){
-    printf("thread admin\n");
+    int sock1, sock2, size, len;
+    struct sockaddr_un local, remote;
+
+    if ((sock1 = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+        perror("socket");
+        exit(1);
+    }
+
+    local.sun_family = AF_UNIX;
+    strcpy(local.sun_path, SOCK_PATH);
+    unlink(local.sun_path);
+
+    len = strlen(local.sun_path) + sizeof(local.sun_family);
+
+    if (bind(sock1, (struct sockaddr *)&local, len) == -1) {
+        perror("bind");
+        exit(2);
+    }
+
+    if (listen(sock1, 1) == -1) {
+        perror("listen");
+        exit(3);
+    }
+
+    while (TRUE) {
+        printf("Waiting for admin client...\n");
+
+        size = sizeof(remote);
+        if ((sock2 = accept(sock1, (struct sockaddr *)&remote, &size)) == -1) {
+            perror("accept");
+            exit(4);
+        }
+
+        printf("Admin client conected/n");
+        adminHandler(sock2);
+    }
+
+    close(sock2);
 }
 
 int main( int argc, char **argv ) {
@@ -321,7 +441,6 @@ int main( int argc, char **argv ) {
         vips_error_exit( NULL );
    
     pthread_t thread_id[2];
-    t = clock();
 
     pthread_create(&thread_id[0], NULL, adminClient, NULL);
     pthread_create(&thread_id[1],NULL, inetClient, NULL);
