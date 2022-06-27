@@ -7,11 +7,17 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/un.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+#include <time.h>
+
+#define SOCK_PATH "echo_socket"
 #define PORT 5001
 #define SA struct sockaddr
 #define m 80
 
+clock_t t;
 
 VipsImage* grayscale(VipsImage* img) {
     VipsImage *scRGB;
@@ -82,84 +88,34 @@ VipsImage* rotation270(VipsImage* img) {
 
 }
 
-int func(int connfd) {
+char *randstring(size_t length) {
 
-    printf("readinf type of operation ");
-    int type;
-    recv(connfd, &type, sizeof(int),0);
-    printf("%d \n",type);
+    static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";        
+    char *randomString = NULL;
 
-    if (type < 1 || type > 5) {
-        return 1;
+    if (length) {
+        randomString = malloc(sizeof(char) * (length +1));
+
+        if (randomString) {            
+            for (int n = 0;n < length;n++) {            
+                int key = rand() % (int)(sizeof(charset) -1);
+                randomString[n] = charset[key];
+            }
+
+            randomString[length] = '\0';
+        }
     }
 
-
-    printf("Reading Picture Size\n");
-    int size;
-    recv(connfd, &size, sizeof(int),0);
-    printf("Received Picture Size: %d\n", size);
-
-    //Read Picture Byte Array
-    printf("Reading Picture Byte Array\n");
-    char p_array[1024];
-    FILE *image = fopen("serverOut/received_from_client.png", "wb");
-    int nb;
-    while (size>0) {
-
-        nb = recv(connfd, p_array, 1024, 0);
-        if (nb<0)
-            continue;
-        size= size-nb;
-        
-        fwrite(p_array, 1, nb, image);
-
-    }
-
-    fclose(image);
-
-    VipsImage *in;
-
-    printf("Image proccesing started\n");
-    if (!(in = vips_image_new_from_file( "serverOut/received_from_client.png", NULL )))
-        vips_error_exit(NULL);
-
-    VipsImage *out;
-    switch (type) {
-    case 1:
-        out = grayscale(in);
-        break;
-    case 2:
-        out =  gaussianblur(in);
-        break;
-    case 3:
-        out = rotation90(in);
-        break;
-    case 4:
-        out = rotation180(in);
-        break;
-    case 5:
-        out = rotation270(in);
-        break;
-    default:
-        break;
-    }
-    
-    if (vips_image_write_to_file( out, "serverOut/output.png", NULL))
-        vips_error_exit(NULL);
-
-    printf("Image proccesing ended\n");
-
-    g_object_unref(in);
-    g_object_unref(out); 
-
-    return 0;
+    return randomString;
 }
 
-void sendImg(int connfd) {
+void sendImg(int connfd, char filename[255]) {
 
+    char folder[255] = "serverOut/";
+    strcat(folder, filename);
     printf("Getting Picture Size\n");
     FILE *picture;
-    picture = fopen("serverOut/output.png", "rb");
+    picture = fopen(folder, "rb");
 
     int sizePic;
     fseek(picture, 0, SEEK_END);
@@ -184,15 +140,115 @@ void sendImg(int connfd) {
     printf("Sended Picture as Byte Array\n");
 }
 
-int main( int argc, char **argv ) {
+int func(int connfd) {
+
+    printf("readinf type of operation ");
+    int type;
+    recv(connfd, &type, sizeof(int),0);
+    printf("%d \n",type);
+
+    if (type < 1 || type > 5) {
+        return 1;
+    }
+
+
+    printf("Reading Picture Size\n");
+    int size;
+    recv(connfd, &size, sizeof(int),0);
+    printf("Received Picture Size: %d\n", size);
+
+    //Read Picture Byte Array
+    printf("Reading Picture Byte Array\n");
+    char p_array[1024];
+    char *filename;
+    filename = randstring(8);
+    strcat(filename, ".png");
+
+    printf("%s\n", filename);
+
+    char folder[255] = "serverIn/";
+    strcat(folder, filename);
+
+    printf("%s\n", folder);
+
+    FILE *image = fopen(folder, "wb");
+    int nb;
+    while (size>0) {
+
+        nb = recv(connfd, p_array, 1024, 0);
+        if (nb<0)
+            continue;
+        size= size-nb;
+        
+        fwrite(p_array, 1, nb, image);
+
+    }
+
+    fclose(image);
+
+    VipsImage *in;
+
+    printf("Image proccesing started\n");
+    if (!(in = vips_image_new_from_file(folder, NULL)))
+        vips_error_exit(NULL);
+
+    printf("image loaded\n");
+
+    VipsImage *out;
+    switch (type) {
+    case 1:
+        out = grayscale(in);
+        break;
+    case 2:
+        out =  gaussianblur(in);
+        break;
+    case 3:
+        out = rotation90(in);
+        break;
+    case 4:
+        out = rotation180(in);
+        break;
+    case 5:
+        out = rotation270(in);
+        break;
+    default:
+        break;
+    }
+    
+    printf("image processed\n");
+
+    char folder1[255] = "serverOut/";
+    strcat(folder1, filename);
+
+    if (vips_image_write_to_file( out, folder1, NULL))
+        vips_error_exit(NULL);
+
+    printf("Image proccesing ended\n");
+
+    g_object_unref(in);
+    g_object_unref(out); 
+
+    
+    sendImg(connfd, filename);
+
+    return 0;
+}
+
+
+void *clientHandler(void* pconfd){
+    int connfd = *(int*)pconfd;
+    free(pconfd);
+    // Function for chatting between client and server
+    if(func(connfd) == 1) {
+        printf("Client disconnected");
+    }
+}
+
+void *inetClient(){
     int sockfd, connfd, len, nready;
     struct sockaddr_in servaddr, cli;
     fd_set rset;
 
-    if(VIPS_INIT(argv[0]))
-        vips_error_exit( NULL );
-   
-    // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1) {
         printf("socket creation failed...\n");
@@ -224,22 +280,11 @@ int main( int argc, char **argv ) {
     else
         printf("Server listening..\n");
 
-    len = sizeof(cli);
-
-
     while (TRUE) {
-
-        // Now server is ready to listen and verification
-        if ((listen(sockfd, 50)) != 0) {
-            printf("Listen failed...\n");
-            exit(0);
-        }
-        else
-            printf("Server listening..\n");
 
         len = sizeof(cli);
 
-        FD_SET(sockfd, &rset);
+        
 
         // Accept the data packet from client and verification
         connfd = accept(sockfd, (SA*)&cli, &len);
@@ -249,16 +294,40 @@ int main( int argc, char **argv ) {
         }
         else
             printf("server accept the client...\n");
+        
+        pthread_t t;
+        int *pconfd = malloc(sizeof(int));
 
-        // Function for chatting between client and server
-        if(func(connfd) == 0) {
-            sendImg(connfd);
-        }
+        *pconfd = connfd;
+
+        pthread_create(&t, NULL, clientHandler, pconfd);
+
+        
         
     }
 
     // After chatting close the socket
     close(sockfd);
+}
+
+void *adminClient(){
+    printf("thread admin\n");
+}
+
+int main( int argc, char **argv ) {
+    
+
+    if(VIPS_INIT(argv[0]))
+        vips_error_exit( NULL );
+   
+    pthread_t thread_id[2];
+    t = clock();
+
+    pthread_create(&thread_id[0], NULL, adminClient, NULL);
+    pthread_create(&thread_id[1],NULL, inetClient, NULL);
+
+    for(int i=0;i<2;i++)
+        pthread_join(thread_id[i],NULL);
 
     return(0);
 }
