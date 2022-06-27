@@ -6,6 +6,12 @@ gcc -o main.out  main.c `pkg-config vips --cflags --libs`
 Run server in C:
 ./main.out
 
+Compile admin client:
+gcc -o client1 client1.c
+
+Run admin client:
+./client1
+
 Compile client in C:
 gcc -o client2 client2.c
 
